@@ -2,8 +2,8 @@
 
 # ==============================================================================
 # TITULO: Universal Installer TUI (UIT)
+# COPATIBILIDADE:Linux (distros diversas)
 # DESCRIÇÃO: Script Híbrido (CLI/TUI) para instalação de pacotes
-# AUTOR: Gemini
 # DEPENDÊNCIAS: whiptail, unzip, tar, sudo, xdg-open
 # ==============================================================================
 
@@ -13,7 +13,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Verificação de dependências
+# Verificação de dependências básicas
 check_dependencies() {
     if ! command -v whiptail &> /dev/null; then
         echo -e "${RED}Erro: 'whiptail' não encontrado.${NC}"
@@ -24,7 +24,7 @@ check_dependencies() {
 
 # Função de Ajuda (Modo TUI/Gráfico)
 show_help() {
-    whiptail --title "Ajuda do Sistema" --msgbox "UNIVERSAL INSTALLER TOOL (UIT)\n\nMODOS DE USO:\n\n1. INTERATIVO:\n   Apenas execute 'uit' (ou uit -gui) para abrir o menu.\n\n2. DIRETO (Linha de Comando):\n   Execute 'uit nome_do_arquivo' para instalação rápida.\n   Ex: uit programa.tar.gz\n\nO script detecta automaticamente a extensão e sugere a instalação.\n\nPressione <OK> para voltar." 18 78
+    whiptail --title "Ajuda do Sistema" --msgbox "UNIVERSAL INSTALLER TOOL (UIT)\n\nMODOS DE USO:\n\n1. INTERATIVO:\n   Apenas execute 'uit' (ou uit -gui) para abrir o menu.\n\n2. DIRETO (Linha de Comando):\n   Execute 'uit nome_do_arquivo' para instalação rápida.\n   Ex: uit programa.rpm\n\nO script detecta automaticamente a extensão e sugere a instalação.\n\nPressione <OK> para voltar." 18 78
 }
 
 # Função de Ajuda (Modo CLI/Terminal)
@@ -46,6 +46,7 @@ print_cli_help() {
     echo "  uit -gui              # Força modo interativo"
     echo "  uit -help             # Mostra ajuda rápida"
     echo "  uit app_1.0.deb       # Instala pacote .deb via APT"
+    echo "  uit app_2.0.rpm       # Instala .rpm (nativo ou via alien)"
     echo "  uit script.tar.gz     # Extrai arquivo compactado"
     echo ""
 }
@@ -55,6 +56,8 @@ detect_file_type() {
     local filename="$1"
     if [[ "$filename" == *.deb ]]; then
         echo ".deb"
+    elif [[ "$filename" == *.rpm ]]; then
+        echo ".rpm"
     elif [[ "$filename" == *.tar.gz ]]; then
         echo ".tar.gz"
     elif [[ "$filename" == *.tar.xz ]]; then
@@ -117,14 +120,15 @@ start_install_flow() {
         FILE_TYPE=$(detect_file_type "$SELECTED_FILE")
         
         if [ "$FILE_TYPE" == "UNKNOWN" ]; then
-            whiptail --title "Erro" --msgbox "Tipo de arquivo não suportado ou desconhecido.\nExtensões suportadas: .deb, .zip, .tar.gz, .tar.xz, .AppImage" 12 60
+            whiptail --title "Erro" --msgbox "Tipo de arquivo não suportado ou desconhecido.\nExtensões suportadas: .deb, .rpm, .zip, .tar.gz, .tar.xz, .AppImage" 12 60
             exit 1
         fi
         
     else
         # MODO INTERATIVO: Pergunta tipo e lista arquivos
-        FILE_TYPE=$(whiptail --title "Tipo de Arquivo" --menu "Qual a extensão do arquivo?" 15 60 5 \
-        ".deb" "Pacote Debian" \
+        FILE_TYPE=$(whiptail --title "Tipo de Arquivo" --menu "Qual a extensão do arquivo?" 16 60 6 \
+        ".deb" "Pacote Debian/Ubuntu" \
+        ".rpm" "Pacote RedHat/Fedora" \
         ".tar.gz" "Arquivo GZip" \
         ".zip" "Arquivo Zip" \
         ".AppImage" "Executável Portátil" \
@@ -153,14 +157,15 @@ start_install_flow() {
     # === ETAPA 3: DESTINO ===
     
     DEFAULT_DEST="/opt"
-    if [[ "$FILE_TYPE" == ".deb" ]]; then
+    # Para pacotes nativos (.deb e .rpm), a instalação é no sistema (/)
+    if [[ "$FILE_TYPE" == ".deb" || "$FILE_TYPE" == ".rpm" ]]; then
         DESTINATION="/" 
-        MSG_DEST="Pacote .deb detectado. Instalação será global via APT."
+        MSG_DEST="Pacote de sistema ($FILE_TYPE) detectado. A instalação será gerenciada globalmente."
     else
         MSG_DEST="Destino da instalação para $SELECTED_FILE:"
     fi
 
-    if [[ "$FILE_TYPE" != ".deb" ]]; then
+    if [[ "$FILE_TYPE" != ".deb" && "$FILE_TYPE" != ".rpm" ]]; then
         DESTINATION=$(whiptail --title "Diretório de Destino" --inputbox "$MSG_DEST" 10 60 "$DEFAULT_DEST" 3>&1 1>&2 2>&3)
     else
         whiptail --title "Confirmação" --msgbox "$MSG_DEST" 10 60
@@ -187,22 +192,68 @@ perform_installation() {
     echo -e "${GREEN}>>> INICIANDO OPERAÇÃO (UIT)${NC}"
     echo "---------------------------------------------------"
     echo -e "Alvo: ${YELLOW}$file${NC}"
-    echo -e "Destino: ${YELLOW}$dest${NC}"
-    echo "---------------------------------------------------"
-
-    # Criação de pasta (se necessário e não for .deb)
-    if [[ "$type" != ".deb" ]]; then
+    echo -e "Tipo: ${YELLOW}$type${NC}"
+    
+    # Criação de pasta (se necessário e não for pacote de sistema)
+    if [[ "$type" != ".deb" && "$type" != ".rpm" ]]; then
+        echo -e "Destino: ${YELLOW}$dest${NC}"
         if [ ! -d "$dest" ]; then
             echo -e "Criando diretório: $dest"
             # Se falhar mkdir normal, tenta sudo
             mkdir -p "$dest" 2>/dev/null || sudo mkdir -p "$dest"
         fi
     fi
+    echo "---------------------------------------------------"
 
     case $type in
         ".deb")
             sudo apt install "$file" -y
             ;;
+        ".rpm")
+            # --- LÓGICA DE DETECÇÃO DE DISTRO ---
+            if [ -f /etc/os-release ]; then
+                . /etc/os-release
+                DISTRO=$ID
+            else
+                DISTRO="unknown"
+            fi
+            
+            echo -e "Distribuição detectada: ${YELLOW}${DISTRO^}${NC}"
+            
+            case "$DISTRO" in
+                ubuntu|debian|linuxmint|pop|kali|neon)
+                    echo -e "Sistema base Debian detectado. RPM não é nativo."
+                    echo -e "Verificando ferramenta de conversão 'alien'..."
+                    
+                    if ! command -v alien &> /dev/null; then
+                        echo -e "${YELLOW}Aviso: 'alien' não instalado.${NC}"
+                        echo "Instalando dependência 'alien' para converter RPM..."
+                        sudo apt-get update && sudo apt-get install alien -y
+                    fi
+                    
+                    echo -e "${GREEN}Convertendo e instalando RPM via Alien...${NC}"
+                    # -i converte e instala, --scripts inclui scripts do pacote
+                    sudo alien -i --scripts "$file"
+                    ;;
+                    
+                fedora|centos|rhel|almalinux|rocky)
+                    echo -e "Sistema base RPM detectado. Usando DNF..."
+                    sudo dnf install "$file" -y
+                    ;;
+                    
+                opensuse*|sles)
+                    echo -e "Sistema OpenSUSE detectado. Usando Zypper..."
+                    sudo zypper install "$file" -y
+                    ;;
+                    
+                *)
+                    echo -e "${YELLOW}AVISO: Distribuição '$DISTRO' não mapeada especificamente para RPM.${NC}"
+                    echo "Tentando instalação genérica com 'rpm -i' (pode falhar por dependências)..."
+                    sudo rpm -i "$file"
+                    ;;
+            esac
+            ;;
+            
         ".tar.gz"|".tar.xz")
             sudo tar -xvf "$file" -C "$dest"
             ;;
