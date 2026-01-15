@@ -11,7 +11,11 @@
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+NC='\033[0m'
+
+# CONFIGURAÇÃO VISUAL
+# Define o texto de ajuda que aparecerá no rodapé de todas as telas
+BACKTITLE="Universal Installer Tool (UIT) - Navegação: [SETAS] | Selecionar: [ENTER] | Voltar/Sair: [ESC]"
 
 # Verificação de dependências básicas
 check_dependencies() {
@@ -24,7 +28,9 @@ check_dependencies() {
 
 # Função de Ajuda (Modo TUI/Gráfico)
 show_help() {
-    whiptail --title "Ajuda do Sistema" --msgbox "UNIVERSAL INSTALLER TOOL (UIT)\n\nMODOS DE USO:\n\n1. INTERATIVO:\n   Apenas execute 'uit' (ou uit -gui) para abrir o menu.\n\n2. DIRETO (Linha de Comando):\n   Execute 'uit nome_do_arquivo' para instalação rápida.\n   Ex: uit programa.rpm\n\nO script detecta automaticamente a extensão e sugere a instalação.\n\nPressione <OK> para voltar." 18 78
+    whiptail --title "Ajuda do Sistema" --backtitle "$BACKTITLE" \
+    --ok-button "Entendi" \
+    --msgbox "UNIVERSAL INSTALLER TOOL (UIT)\n\nMODOS DE USO:\n\n1. INTERATIVO:\n   Apenas execute 'uit' (ou uit -gui) para abrir o menu.\n\n2. DIRETO (Linha de Comando):\n   Execute 'uit nome_do_arquivo' para instalação rápida.\n   Ex: uit programa.rpm\n\nO script detecta automaticamente a extensão e sugere a instalação.\n\nPressione <ENTER> para voltar." 18 78
 }
 
 # Função de Ajuda (Modo CLI/Terminal)
@@ -86,7 +92,9 @@ scan_files() {
 # Menu Principal (Modo Interativo)
 main_menu() {
     while true; do
-        CHOICE=$(whiptail --title "UIT - Gerenciador de Instalação" --menu "Escolha uma opção:" 15 60 4 \
+        CHOICE=$(whiptail --title "UIT - Gerenciador de Instalação" --backtitle "$BACKTITLE" \
+        --ok-button "Selecionar" --cancel-button "Sair" \
+        --menu "Escolha uma opção:" 15 60 4 \
         "1" "Iniciar Instalação (Buscar Arquivos)" \
         "2" "Ajuda / Sobre" \
         "3" "Sair" 3>&1 1>&2 2>&3)
@@ -112,7 +120,7 @@ start_install_flow() {
     if [ -n "$input_file" ]; then
         # MODO DIRETO: Arquivo passado via linha de comando
         if [ ! -f "$input_file" ]; then
-            whiptail --title "Erro" --msgbox "O arquivo especificado não foi encontrado:\n$input_file" 10 60
+            whiptail --title "Erro" --backtitle "$BACKTITLE" --msgbox "O arquivo especificado não foi encontrado:\n$input_file" 10 60
             exit 1
         fi
         
@@ -120,13 +128,15 @@ start_install_flow() {
         FILE_TYPE=$(detect_file_type "$SELECTED_FILE")
         
         if [ "$FILE_TYPE" == "UNKNOWN" ]; then
-            whiptail --title "Erro" --msgbox "Tipo de arquivo não suportado ou desconhecido.\nExtensões suportadas: .deb, .rpm, .zip, .tar.gz, .tar.xz, .AppImage" 12 60
+            whiptail --title "Erro" --backtitle "$BACKTITLE" --msgbox "Tipo de arquivo não suportado ou desconhecido.\nExtensões suportadas: .deb, .rpm, .zip, .tar.gz, .tar.xz, .AppImage" 12 60
             exit 1
         fi
         
     else
         # MODO INTERATIVO: Pergunta tipo e lista arquivos
-        FILE_TYPE=$(whiptail --title "Tipo de Arquivo" --menu "Qual a extensão do arquivo?" 16 60 6 \
+        FILE_TYPE=$(whiptail --title "Tipo de Arquivo" --backtitle "$BACKTITLE" \
+        --ok-button "Confirmar" --cancel-button "Voltar" \
+        --menu "Qual a extensão do arquivo?" 16 60 6 \
         ".deb" "Pacote Debian/Ubuntu" \
         ".rpm" "Pacote RedHat/Fedora" \
         ".tar.gz" "Arquivo GZip" \
@@ -134,21 +144,30 @@ start_install_flow() {
         ".AppImage" "Executável Portátil" \
         ".tar.xz" "Arquivo XZ" 3>&1 1>&2 2>&3)
 
-        if [ -z "$FILE_TYPE" ]; then return; fi
+        if [ -z "$FILE_TYPE" ]; then return; fi # Voltar pressionado
 
         scan_files "$FILE_TYPE"
         
         if [ ${#files_list[@]} -le 2 ]; then
-             whiptail --title "Aviso" --msgbox "Nenhum arquivo $FILE_TYPE na pasta atual." 10 60
+             whiptail --title "Aviso" --backtitle "$BACKTITLE" --ok-button "Continuar" --msgbox "Nenhum arquivo $FILE_TYPE na pasta atual." 10 60
              SELECTED_FILE="OUTRO"
         else
-            SELECTED_FILE=$(whiptail --title "Seleção de Arquivo" --menu "Selecione o arquivo:" 15 70 5 "${files_list[@]}" 3>&1 1>&2 2>&3)
+            SELECTED_FILE=$(whiptail --title "Seleção de Arquivo" --backtitle "$BACKTITLE" \
+            --ok-button "Instalar Este" --cancel-button "Voltar" \
+            --menu "Selecione o arquivo:" 15 70 5 "${files_list[@]}" 3>&1 1>&2 2>&3)
         fi
+        
+        if [ -z "$SELECTED_FILE" ]; then return; fi # Voltar pressionado
 
         if [ "$SELECTED_FILE" == "OUTRO" ]; then
-            SELECTED_FILE=$(whiptail --title "Caminho Manual" --inputbox "Digite o caminho completo:" 10 60 3>&1 1>&2 2>&3)
+            SELECTED_FILE=$(whiptail --title "Caminho Manual" --backtitle "$BACKTITLE" \
+            --ok-button "Confirmar" --cancel-button "Voltar" \
+            --inputbox "Digite o caminho completo:" 10 60 3>&1 1>&2 2>&3)
+            
+            if [ $? -ne 0 ]; then return; fi # Cancelar pressionado
+
             if [ ! -f "$SELECTED_FILE" ]; then
-                whiptail --title "Erro" --msgbox "Arquivo não encontrado!" 10 60
+                whiptail --title "Erro" --backtitle "$BACKTITLE" --msgbox "Arquivo não encontrado!" 10 60
                 return
             fi
         fi
@@ -157,7 +176,7 @@ start_install_flow() {
     # === ETAPA 3: DESTINO ===
     
     DEFAULT_DEST="/opt"
-    # Para pacotes nativos (.deb e .rpm), a instalação é no sistema (/)
+    # Para pacotes nativos (.deb e .rpm), a instalação é na raiz do sistema
     if [[ "$FILE_TYPE" == ".deb" || "$FILE_TYPE" == ".rpm" ]]; then
         DESTINATION="/" 
         MSG_DEST="Pacote de sistema ($FILE_TYPE) detectado. A instalação será gerenciada globalmente."
@@ -166,16 +185,21 @@ start_install_flow() {
     fi
 
     if [[ "$FILE_TYPE" != ".deb" && "$FILE_TYPE" != ".rpm" ]]; then
-        DESTINATION=$(whiptail --title "Diretório de Destino" --inputbox "$MSG_DEST" 10 60 "$DEFAULT_DEST" 3>&1 1>&2 2>&3)
+        DESTINATION=$(whiptail --title "Diretório de Destino" --backtitle "$BACKTITLE" \
+        --ok-button "Confirmar" --cancel-button "Voltar" \
+        --inputbox "$MSG_DEST" 10 60 "$DEFAULT_DEST" 3>&1 1>&2 2>&3)
     else
-        whiptail --title "Confirmação" --msgbox "$MSG_DEST" 10 60
+        whiptail --title "Confirmação" --backtitle "$BACKTITLE" \
+        --ok-button "Continuar" --msgbox "$MSG_DEST" 10 60
     fi
     
     if [ $? -ne 0 ]; then return; fi # Cancelado pelo usuário
 
     # === ETAPA 4: CONFIRMAÇÃO FINAL ===
     
-    if (whiptail --title "Confirmar Instalação" --yesno "Resumo:\n\nArquivo: $SELECTED_FILE\nTipo: $FILE_TYPE\nDestino: $DESTINATION\n\nProceder?" 15 60); then
+    if (whiptail --title "Confirmar Instalação" --backtitle "$BACKTITLE" \
+    --yes-button "Instalar" --no-button "Cancelar" \
+    --yesno "Resumo:\n\nArquivo: $SELECTED_FILE\nTipo: $FILE_TYPE\nDestino: $DESTINATION\n\nProceder?" 15 60); then
         perform_installation "$FILE_TYPE" "$SELECTED_FILE" "$DESTINATION"
     else
         # Se estiver no modo direto e cancelar, sai do script
@@ -187,11 +211,20 @@ perform_installation() {
     local type=$1
     local file=$2
     local dest=$3
-    
+
+    # Busca o caminho absoluto do arquivo
+    if command -v realpath &> /dev/null; then
+         local full_path_file=$(realpath "$file")
+    else
+         # Fallback se realpath não existir
+         local full_path_file=$(readlink -f "$file")
+    fi
+
     clear
     echo -e "${GREEN}>>> INICIANDO OPERAÇÃO (UIT)${NC}"
     echo "---------------------------------------------------"
-    echo -e "Alvo: ${YELLOW}$file${NC}"
+    echo -e "Arquivo Original: ${YELLOW}$file${NC}"
+    echo -e "Caminho Absoluto: ${YELLOW}$full_path_file${NC}"
     echo -e "Tipo: ${YELLOW}$type${NC}"
     
     # Criação de pasta (se necessário e não for pacote de sistema)
@@ -207,7 +240,9 @@ perform_installation() {
 
     case $type in
         ".deb")
-            sudo apt install "$file" -y
+            # Utilização do caminho absoluto para que o apt 
+            # instale o arquivo local e não busque em nuvem
+            sudo apt install "$full_path_file" -y
             ;;
         ".rpm")
             # --- LÓGICA DE DETECÇÃO DE DISTRO ---
@@ -233,36 +268,36 @@ perform_installation() {
                     
                     echo -e "${GREEN}Convertendo e instalando RPM via Alien...${NC}"
                     # -i converte e instala, --scripts inclui scripts do pacote
-                    sudo alien -i --scripts "$file"
+                    sudo alien -i --scripts "$full_path_file"
                     ;;
                     
                 fedora|centos|rhel|almalinux|rocky)
                     echo -e "Sistema base RPM detectado. Usando DNF..."
-                    sudo dnf install "$file" -y
+                    sudo dnf install "$full_path_file" -y
                     ;;
                     
                 opensuse*|sles)
                     echo -e "Sistema OpenSUSE detectado. Usando Zypper..."
-                    sudo zypper install "$file" -y
+                    sudo zypper install "$full_path_file" -y
                     ;;
                     
                 *)
                     echo -e "${YELLOW}AVISO: Distribuição '$DISTRO' não mapeada especificamente para RPM.${NC}"
                     echo "Tentando instalação genérica com 'rpm -i' (pode falhar por dependências)..."
-                    sudo rpm -i "$file"
+                    sudo rpm -i "$full_path_file"
                     ;;
             esac
             ;;
             
         ".tar.gz"|".tar.xz")
-            sudo tar -xvf "$file" -C "$dest"
+            sudo tar -xvf "$full_path_file" -C "$dest"
             ;;
         ".zip")
-            sudo unzip "$file" -d "$dest"
+            sudo unzip "$full_path_file" -d "$dest"
             ;;
         ".AppImage")
-            sudo chmod +x "$file"
-            sudo cp "$file" "$dest/"
+            sudo chmod +x "$full_path_file"
+            sudo cp "$full_path_file" "$dest/"
             ;;
     esac
 
@@ -283,9 +318,11 @@ post_install_actions() {
     local title=$2
     local msg=$3
 
-    whiptail --title "$title" --msgbox "$msg" 10 60
+    whiptail --title "$title" --backtitle "$BACKTITLE" --ok-button "Entendi" --msgbox "$msg" 10 60
 
-    if (whiptail --title "Explorar" --yesno "Abrir pasta de instalação?" 10 60); then
+    if (whiptail --title "Explorar" --backtitle "$BACKTITLE" \
+        --yes-button "Sim, abrir pasta" --no-button "Sair" \
+        --yesno "Deseja abrir o gerenciador de arquivos na pasta de instalação?" 10 60); then
         # Tenta abrir como usuário normal mesmo se script for sudo
         if [ -n "$SUDO_USER" ]; then
             sudo -u "$SUDO_USER" xdg-open "$dest" > /dev/null 2>&1 &
