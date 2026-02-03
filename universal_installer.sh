@@ -4,7 +4,6 @@
 # TITULO: Universal Installer TUI (UIT)
 # COPATIBILIDADE:Linux (distros diversas)
 # DESCRIÇÃO: Script Híbrido (CLI/TUI) para instalação de pacotes
-# DEPENDÊNCIAS: whiptail, unzip, tar, sudo, xdg-open
 # ==============================================================================
 
 # Cores para logs
