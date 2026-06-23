@@ -95,6 +95,11 @@ Exibe as instruções de uso no terminal sem abrir a interface gráfica.
 uit -help
 ```
 
+### Considerações sobre Arquivos Compactados:
+Arquivos compactados (`.tar.gz`, `.zip`, etc.) exigem etapas extras, realizada pelo próprio usuário, para finalizar a instalação após a extração dos arquivos. Alguns podem exigir compilação para que se tornem executáveis. Outros, já pré-compilados, podem exigir apenas que o arquivo correto seja utilizado. Em ambos os casos, o usuário precisa incluir manualmente o atalho no menu de aplicativos para acesso padronizado.
+
+Pretendo oferecer suporte via UIT para automatizar cada etapa do processo com o mínimo de interação do usuário necessária, mas, por enquanto, o UIT apenas extraí os arquivos na pasta de destino escolhida pelo usuário. 
+ 
 ## Como Desinstalar Aplicativos
 
 Como o UIT gerencia diferentes tipos de arquivos, a remoção varia:
